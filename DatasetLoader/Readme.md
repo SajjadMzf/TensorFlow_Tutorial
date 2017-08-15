@@ -1,1 +1,1 @@
-Note: Sample Datas are drawn from NotMnist Dataset.
+Note: Sample data are drawn from NotMnist Dataset.
