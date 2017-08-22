@@ -5,12 +5,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 DATASET_DIR = './Dataset'
 
-def _bytes_feature(value):
-    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[bytes(value)]))
-
-def _int64_feature(value):
-    return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
-
 class datasetLoader:
 
     def __init__(self, dataset_dir, batch_size, image_size,check_readability = True, max_images_in_ram = None, shuffled = True):
@@ -31,7 +25,7 @@ class datasetLoader:
             self.miir = max_images_in_ram
             if self.miir < self.batch_size or self.miir % self.batch_size:
                 raise ValueError("max_images_in_ram parameter should be multiple of batch_size and equal or less than data_size ")
-        self.images_in_ram = np.zeros([self.miir, self.image_size[0], self.image_size[1], self.image_size[2]])
+        self.images_in_ram = np.zeros([self.miir, self.image_size[0], self.image_size[1], self.image_size[2]], dtype= np.float32)
         self.targets_in_ram = np.zeros([self.miir])
         self.data_idx = np.arange(0,int(self.data_size))
         if shuffled is True:
@@ -45,11 +39,13 @@ class datasetLoader:
         targets = []
         target_2_idx = {}
         idx_2_target = {}
+        ErrorTag = 0
         print('Targets are:')
         for itr, class_name in enumerate(sorted(os.listdir(self.dataset_dir))):
             idx_2_target[itr] = class_name
             target_2_idx[class_name] = itr
             images_name = sorted(os.listdir(os.path.join(self.dataset_dir, class_name)))
+
             if check is True:
                 temp = np.zeros([self.image_size[0], self.image_size[1], self.image_size[2]])
                 for idx, image in enumerate(images_name):
@@ -57,35 +53,41 @@ class datasetLoader:
                     try:
                         temp = imread(data_dir).astype(float)
                     except (ValueError, IOError, OSError) as e:
+                        ErrorTag = 1
                         print(e,'(It is recommended to delete this file and run again)')
                         del images_name[idx]
+
 
             inputs_file.extend(images_name)
             print(class_name)
             targets.extend(itr*np.ones(len(images_name)))
+        if check == 1 and ErrorTag == 0:
+            print('All Files are verified, No need to check readability in next run.')
         return inputs_file, targets, target_2_idx, idx_2_target
 
     def load_data(self):
         itr = 0
         load_itr = 0
         while itr < self.miir:
-           load_itr = self.data_idx[self.load_itr]
-           data_dir = os.path.join(
+            self.load_itr = self.load_itr % self.data_size
+            load_itr = self.data_idx[self.load_itr]
+            data_dir = os.path.join(
                os.path.join(self.dataset_dir, self.idx_2_target[self.targets[load_itr]]),
                self.inputs_file[load_itr])
 
-           self.images_in_ram[itr] = imread(data_dir,mode = 'RGB').astype(float)
-           self.targets_in_ram[itr] = self.targets[load_itr]
-           self.load_itr += 1
-           itr += 1
+            self.images_in_ram[itr] = imread(data_dir,mode = 'RGB').astype(float)
+            self.targets_in_ram[itr] = self.targets[load_itr]
+            self.load_itr += 1
+            itr += 1
 
     def next_batch(self ):
         if self.batch_itr > self.total_batch:
             self.batch_itr = 0
             self.load_itr = 0
             self.internal_batch_itr = 0
-            self.load_data()
-        if self.internal_batch_itr >= (self.miir//self.batch_size):
+            if self.miir<self.data_size:
+                self.load_data()
+        if self.miir<self.data_size and self.internal_batch_itr >= (self.miir//self.batch_size):
             self.load_data()
             self.internal_batch_itr = self.internal_batch_itr % (self.miir // self.batch_size)
         input_batch = self.images_in_ram[self.internal_batch_itr*self.batch_size:(self.internal_batch_itr+1)*
